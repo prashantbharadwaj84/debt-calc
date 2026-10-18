@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debt Avalanche &amp; Snowball Planner | Bharrys Financial Suite</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{box-sizing:border-box;color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:#090d16;color:#f1f5f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.glass-panel{background:rgba(17,24,39,.75);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08)}
+.glass-card{background:rgba(15,23,42,.6);border:1px solid rgba(56,189,248,.2)}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.scroll-x{overflow-x:auto}
+@media print{
+ @page{margin:12mm}
+ .no-print{display:none!important}
+ html,body{background:#fff!important;color:#111!important}
+ .glass-panel,.glass-card,[class*="bg-slate-"]{background:#fff!important;border-color:#cbd5e1!important;backdrop-filter:none!important}
+ .text-white,.text-slate-200,.text-slate-300{color:#111!important}
+ .text-slate-400,.text-slate-500{color:#475569!important}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body class="min-h-full flex flex-col antialiased">
+<header class="no-print border-b border-slate-800 bg-[#090d16]/85 backdrop-blur-md sticky top-0 z-10">
+ <div class="max-w-5xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+  <div>
+   <h1 class="text-base font-extrabold text-white mono leading-none">BHARRYS <span class="text-cyan-400">FINANCIAL</span></h1>
+   <p class="text-[10px] text-slate-400 mt-0.5">Debt Avalanche &amp; Snowball Planner</p>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 mono text-xs">
+   <button id="first" class="hidden px-3 py-1.5 rounded-xl bg-slate-900/80 text-cyan-400 border border-slate-700/80 hover:bg-slate-800 font-bold cursor-pointer">« Back to Page 1</button>
+   <button id="reset" class="px-3 py-1.5 rounded-xl bg-slate-900/80 text-amber-400 border border-slate-700/80 hover:bg-slate-800 font-bold cursor-pointer">Reset</button>
+   <button id="print" class="hidden px-3 py-1.5 rounded-xl bg-slate-900/80 text-slate-200 border border-slate-700/80 hover:bg-slate-800 font-bold cursor-pointer">Print</button>
+   <a href="https://financialhub.bharrys.com/" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-xl bg-slate-900/80 text-slate-200 border border-slate-700/80 hover:bg-slate-800 font-bold">Financial Hub</a>
+  </div>
+ </div>
+</header>
+<main class="max-w-5xl w-full mx-auto px-4 py-6">
+ <section class="glass-panel rounded-2xl p-5 sm:p-6 space-y-6">
+  <div class="border-b border-slate-800 pb-4 space-y-2">
+   <div id="prog" class="no-print flex flex-wrap gap-2 mono text-[11px]"></div>
+   <h2 id="title" class="text-xl font-extrabold text-white"></h2>
+   <p id="sub" class="text-xs text-slate-400"></p>
+  </div>
+  <div id="pages"></div>
+  <p id="err" class="hidden text-[11px] text-rose-400 font-bold mono"></p>
+  <div id="bar" class="no-print p-4 bg-slate-900/90 rounded-xl border border-cyan-500/30 flex items-center justify-between gap-3">
+   <button id="back" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs mono font-bold cursor-pointer">« Back</button>
+   <button id="next" class="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-xs mono font-extrabold cursor-pointer">Next »</button>
+  </div>
+  <p class="text-[10px] text-slate-500 leading-snug">Estimates assume fixed APRs, monthly compounding and on-time payments. Your inputs are saved in this browser only. This is not financial advice.</p>
+ </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const KEY='debt-wiz';
+const DEF={debts:[{n:'',b:'',r:'',m:''}],extra:'',lump:'',method:'avalanche',roll:'1',view:'avalanche'};
+const clone=o=>JSON.parse(JSON.stringify(o));
+let S=clone(DEF),step=0;
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&Array.isArray(s.debts)&&s.debts.length)S=Object.assign(clone(DEF),s)}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>'$'+Math.round(n).toLocaleString('en-US');
+const dur=m=>{const y=Math.floor(m/12),r=m%12;return ((y?y+' yr ':'')+(r||!y?r+' mo':'')).trim()};
+const dt=m=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth()+m,1).toLocaleDateString('en-US',{month:'short',year:'numeric'})};
+const num=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
+const SAMPLE=[{n:'Credit card',b:6200,r:24.9,m:155},{n:'Car loan',b:11800,r:7.4,m:320},{n:'Personal loan',b:3400,r:11.5,m:120},{n:'Store card',b:900,r:29.9,m:35}];
+
+/* ---------- engine ---------- */
+function sim(method,extra,lump,roll){
+ const D=S.debts.map((d,i)=>({n:d.n.trim()||'Debt '+(i+1),b:num(d.b),r:num(d.r)/1200,m:num(d.m),done:false}));
+ const rows=[],order=[];let mo=0,tI=0,tP=0;
+ const open=()=>D.some(d=>d.b>0.005);
+ while(mo<600&&open()){
+  mo++;let int=0,paid=0,pool=extra+(mo===1?lump:0);
+  D.forEach(d=>{if(d.b>0.005){const x=d.b*d.r;d.b+=x;int+=x}});
+  D.forEach(d=>{
+   if(d.b>0.005){const p=Math.min(d.m,d.b);d.b-=p;paid+=p;if(roll)pool+=d.m-p}else if(roll)pool+=d.m;
+  });
+  const act=D.filter(d=>d.b>0.005).sort((a,b)=>method==='avalanche'?(b.r-a.r)||(a.b-b.b):(a.b-b.b)||(b.r-a.r));
+  for(const d of act){if(pool<=0)break;const p=Math.min(pool,d.b);d.b-=p;pool-=p;paid+=p}
+  D.forEach(d=>{if(!d.done&&d.b<=0.005){d.done=true;d.b=0;order.push({n:d.n,mo})}});
+  tI+=int;tP+=paid;rows.push({int,paid,bal:D.reduce((a,d)=>a+d.b,0)});
+ }
+ return{mo,tI,tP,rows,order,never:open(),total0:S.debts.reduce((a,d)=>a+num(d.b),0)};
+}
+
+/* ---------- ui helpers ---------- */
+const INP='w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg font-extrabold outline-none focus:border-cyan-400 transition select-text ';
+const FLD=(attr,label,val,col,ph,type='number',hint='')=>`<div class="${type==='text'?'col-span-2 sm:col-span-1':''}"><label class="block text-[11px] font-bold text-slate-300 mb-1">${label}</label><input ${attr} type="${type}" ${type==='number'?'inputmode="decimal" step="any" min="0"':'maxlength="30"'} value="${esc(val)}" placeholder="${ph}" class="${INP}${col}">${hint?`<p class="text-[10px] text-slate-500 mt-1">${hint}</p>`:''}</div>`;
+const CARD=(inner,extra='')=>`<div class="glass-card p-4 rounded-xl space-y-4 border-cyan-500/30 bg-slate-900/80 font-mono text-xs ${extra}">${inner}</div>`;
+const mins=()=>S.debts.reduce((a,d)=>a+num(d.m),0);
+
+/* ---------- pages ---------- */
+function pgDebts(){
+ return CARD(`<p class="text-slate-300 leading-relaxed">Add every debt you want to pay off: credit cards, car loans, student loans, personal loans. Leave out your mortgage unless you want it included.</p>`+
+ S.debts.map((d,i)=>`<div class="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-3"><div class="flex items-center justify-between"><span class="font-bold text-slate-200">Debt ${i+1}</span>${S.debts.length>1?`<button type="button" data-del="${i}" class="text-rose-400 hover:text-rose-300 font-bold cursor-pointer">Remove</button>`:''}</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-3">`+
+  FLD(`data-d="${i}" data-f="n"`,'Name',d.n,'text-white','e.g. Visa card','text')+
+  FLD(`data-d="${i}" data-f="b"`,'Balance ($)',d.b,'text-emerald-400','5000')+
+  FLD(`data-d="${i}" data-f="r"`,'Interest rate (APR %)',d.r,'text-emerald-400','22.9')+
+  FLD(`data-d="${i}" data-f="m"`,'Minimum payment ($/mo)',d.m,'text-emerald-400','150')+`</div></div>`).join('')+
+ `<div class="flex flex-wrap gap-2"><button type="button" data-add class="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 rounded-lg font-bold cursor-pointer">+ Add another debt</button><button type="button" data-ex class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg font-bold cursor-pointer">Load example debts</button></div>
+ <p class="text-[11px] text-slate-400">Total balance <b id="t-bal" class="text-white"></b> across ${S.debts.length} ${S.debts.length>1?'debts':'debt'}, minimums <b id="t-min" class="text-white"></b>/mo.</p>`);
+}
+function pgBudget(){
+ return CARD(`<p class="text-slate-300 leading-relaxed">Minimum payments alone keep you in debt the longest. Anything extra goes straight at your target debt and speeds everything up.</p>
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">`+
+ FLD('data-g="extra"','Extra payment each month ($)',S.extra,'text-emerald-400','200','number','On top of your minimums. Leave blank for none.')+
+ FLD('data-g="lump"','One-time lump sum now ($)',S.lump,'text-emerald-400','0','number','A bonus or tax refund, applied in month 1. Optional.')+
+ `</div><div class="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-slate-300">Minimums <b class="text-white">${fmt(mins())}</b> + extra <b id="b-ex" class="text-emerald-400"></b> = <b id="b-tot" class="text-cyan-300"></b> paid toward debt each month.</div>`);
+}
+const OPT=(id,t,s,c)=>`<button type="button" data-method="${id}" class="text-left p-4 rounded-xl border transition cursor-pointer ${S.method===id?`border-${c}-400 bg-${c}-950/40`:'border-slate-700 bg-slate-950/80 hover:bg-slate-900'}"><span class="block font-extrabold text-${c}-300 text-sm">${t}</span><span class="block text-slate-300 mt-1 leading-relaxed">${s}</span></button>`;
+function pgStrategy(){
+ return CARD(`<p class="text-slate-300">Pick the method you prefer. We will show both side by side on the next page.</p>
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${OPT('avalanche','Avalanche','Pay the highest interest rate first. Costs the least in interest and usually finishes soonest.','cyan')}${OPT('snowball','Snowball','Pay the smallest balance first. You clear accounts sooner, which builds momentum.','amber')}</div>
+ <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800"><label class="font-bold text-slate-200">Roll freed-up payments into the next debt?<span class="block font-normal text-[11px] text-slate-400 mt-0.5">When a debt is paid off, its minimum moves to the next target. Recommended.</span></label><div class="flex gap-2 shrink-0">${[['1','Yes'],['0','No']].map(([v,t])=>`<button type="button" data-roll="${v}" class="px-4 py-1.5 rounded-lg border font-bold cursor-pointer ${S.roll===v?'bg-cyan-500 border-cyan-400 text-slate-950':'bg-slate-900 border-slate-700 text-slate-300'}">${t}</button>`).join('')}</div></div>`);
+}
+const KP=(t,v,c='text-white')=>`<div><p class="text-[10px] text-slate-400">${t}</p><p class="text-sm font-extrabold ${c}">${v}</p></div>`;
+function chart(list){
+ const W=640,H=230,L=58,B=26,T=10,R=10,mx=Math.max(...list.map(x=>x.r.mo),1),my=list[0].r.total0||1;
+ const X=m=>L+m/mx*(W-L-R),Y=v=>T+(1-v/my)*(H-T-B);
+ const pl=r=>{const p=[[0,r.total0]].concat(r.rows.map((x,i)=>[i+1,x.bal]));const st=Math.ceil(p.length/160);return p.filter((_,i)=>i%st===0||i===p.length-1).map(([m,v])=>X(m).toFixed(1)+','+Y(v).toFixed(1)).join(' ')};
+ return `<div class="scroll-x"><svg viewBox="0 0 ${W} ${H}" class="w-full min-w-[420px]" role="img" aria-label="Total debt balance over time by method"><g stroke="#334155" stroke-width="1"><line x1="${L}" y1="${Y(0)}" x2="${W-R}" y2="${Y(0)}"/><line x1="${L}" y1="${T}" x2="${L}" y2="${Y(0)}"/><line x1="${L}" y1="${Y(my/2)}" x2="${W-R}" y2="${Y(my/2)}" stroke-dasharray="3 4"/></g><g fill="#94a3b8" font-size="11" font-family="ui-monospace,monospace"><text x="${L-6}" y="${T+8}" text-anchor="end">${fmt(my)}</text><text x="${L-6}" y="${Y(my/2)+4}" text-anchor="end">${fmt(my/2)}</text><text x="${L-6}" y="${Y(0)+4}" text-anchor="end">$0</text><text x="${L}" y="${H-6}">Now</text><text x="${W-R}" y="${H-6}" text-anchor="end">${dur(mx)}</text></g>`+
+ list.map(x=>`<polyline points="${pl(x.r)}" fill="none" stroke="${x.c}" stroke-width="2.5" ${x.d?'stroke-dasharray="5 5"':''} stroke-linejoin="round"/>`).join('')+`</svg></div><div class="flex flex-wrap gap-4 text-[11px] text-slate-300">${list.map(x=>`<span class="flex items-center gap-1.5"><span class="inline-block w-4 h-0.5" style="background:${x.c}"></span>${x.t}</span>`).join('')}</div>`;
+}
+function pgResults(){
+ const ex=num(S.extra),lu=num(S.lump),roll=S.roll==='1';
+ const A=sim('avalanche',ex,lu,roll),Sn=sim('snowball',ex,lu,roll),Base=sim(S.method,0,0,false);
+ const R={avalanche:A,snowball:Sn},cur=R[S.view];
+ const card=(id,t,c,r)=>{const sel=S.method===id;return `<div class="glass-card p-4 rounded-xl space-y-3 ${sel?`border-${c}-400`:''}"><div class="flex items-center justify-between"><span class="font-extrabold text-${c}-300 text-sm">${t}</span>${sel?`<span class="text-[10px] bg-${c}-950 text-${c}-300 border border-${c}-700/60 px-2 py-0.5 rounded-md font-bold">Your pick</span>`:''}</div>`+
+  (r.never?`<p class="text-rose-300 font-bold">Not paid off within 50 years. Raise your extra payment or check that each minimum covers its monthly interest.</p>`:`<div class="grid grid-cols-2 gap-3">${KP('Debt-free',dt(r.mo),'text-emerald-400')}${KP('Time',dur(r.mo))}${KP('Total interest',fmt(r.tI),'text-rose-300')}${KP('Total paid',fmt(r.tP))}</div>`+
+  (Base.never?'':`<p class="text-[11px] text-slate-400">vs minimums only: saves <b class="text-emerald-400">${fmt(Base.tI-r.tI)}</b> interest and <b class="text-emerald-400">${dur(Base.mo-r.mo)}</b>.</p>`))+`</div>`};
+ let ins='';
+ if(!A.never&&!Sn.never){const di=Sn.tI-A.tI,dm=Sn.mo-A.mo,f1=A.order[0],f2=Sn.order[0];
+  ins=`Avalanche ${di>0.5?`saves <b class="text-emerald-400">${fmt(di)}</b> in interest`:'costs about the same in interest'}${dm>0?` and finishes <b class="text-emerald-400">${dur(dm)}</b> sooner`:dm===0?' and finishes in the same time':''} than Snowball. Snowball clears its first debt (${esc(f2.n)}) in <b class="text-amber-300">${dur(f2.mo)}</b>; Avalanche clears ${esc(f1.n)} in ${dur(f1.mo)}.`}
+ const yrs=[];cur.rows.forEach((x,i)=>{const y=Math.floor(i/12);yrs[y]=yrs[y]||{p:0,i:0,b:0,m:0};yrs[y].p+=x.paid;yrs[y].i+=x.int;yrs[y].b=x.bal;yrs[y].m=i+1});
+ return `<div class="space-y-5 font-mono text-xs"><div class="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/30 text-slate-200 leading-relaxed">You owe <b class="text-white">${fmt(A.total0)}</b> and will pay <b class="text-white">${fmt(mins()+ex)}</b> a month${lu?` plus ${fmt(lu)} now`:''}. ${ins}</div>
+ <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${card('avalanche','Avalanche','cyan',A)}${card('snowball','Snowball','amber',Sn)}</div>
+ <div class="glass-card p-4 rounded-xl space-y-3"><p class="font-bold text-slate-200">Total debt over time</p>${chart([{t:'Avalanche',c:'#22d3ee',r:A},{t:'Snowball',c:'#fbbf24',r:Sn},{t:'Minimums only',c:'#64748b',d:1,r:Base}])}</div>
+ <div class="no-print flex gap-2">${[['avalanche','Avalanche'],['snowball','Snowball']].map(([v,t])=>`<button type="button" data-view="${v}" class="px-4 py-2 rounded-xl border font-bold cursor-pointer ${S.view===v?'bg-cyan-500 border-cyan-400 text-slate-950':'bg-slate-900 border-slate-700 text-slate-300'}">${t} details</button>`).join('')}</div>
+ <div class="glass-card p-4 rounded-xl space-y-3"><p class="font-bold text-slate-200">${S.view==='avalanche'?'Avalanche':'Snowball'} payoff order</p><ol class="space-y-2">${cur.order.map((o,i)=>`<li class="flex items-center justify-between gap-3 p-2.5 bg-slate-950/80 rounded-lg border border-slate-800"><span class="text-slate-200"><b class="text-cyan-300">${i+1}.</b> ${esc(o.n)}</span><span class="text-slate-400">${dt(o.mo)} (${dur(o.mo)})</span></li>`).join('')||'<li class="text-slate-400">No payoff within 50 years.</li>'}</ol></div>
+ <div class="glass-card p-4 rounded-xl space-y-3"><p class="font-bold text-slate-200">Year by year</p><div class="scroll-x"><table class="w-full min-w-[460px] text-right"><thead><tr class="text-slate-400 border-b border-slate-800"><th class="text-left py-2 font-bold">Year</th><th class="font-bold">Paid</th><th class="font-bold">Interest</th><th class="font-bold">Balance at end</th></tr></thead><tbody>${yrs.map((y,i)=>`<tr class="border-b border-slate-800/60"><td class="text-left py-2 text-slate-300">Year ${i+1} <span class="text-slate-500">(to ${dt(y.m)})</span></td><td>${fmt(y.p)}</td><td class="text-rose-300">${fmt(y.i)}</td><td class="text-white">${fmt(y.b)}</td></tr>`).join('')}</tbody></table></div></div></div>`;
+}
+const PAGES=[
+ ['Your Debts','List each debt with its balance, interest rate and minimum payment.',pgDebts],
+ ['Monthly Budget','Decide how much extra you can put toward debt.',pgBudget],
+ ['Choose a Strategy','Avalanche saves the most money. Snowball gives the quickest wins.',pgStrategy],
+ ['Your Payoff Plan','Compare both methods and see your debt-free date.',pgResults]];
+const LAST=PAGES.length-1;
+
+/* ---------- wizard ---------- */
+function upd(){
+ const b=S.debts.reduce((a,d)=>a+num(d.b),0);
+ if($('t-bal')){$('t-bal').textContent=fmt(b);$('t-min').textContent=fmt(mins())}
+ if($('b-ex')){$('b-ex').textContent=fmt(num(S.extra));$('b-tot').textContent=fmt(mins()+num(S.extra))}
+}
+function validate(){
+ if(step===0){
+  for(let i=0;i<S.debts.length;i++){const d=S.debts[i],n='Debt '+(i+1);
+   if(!(num(d.b)>0))return n+': enter a balance above $0.';
+   if(d.r===''||num(d.r)<0||num(d.r)>100)return n+': enter an APR between 0 and 100.';
+   if(!(num(d.m)>0))return n+': enter the minimum monthly payment.';
+   if(num(d.m)<num(d.b)*num(d.r)/1200&&num(S.extra)<=0&&S.debts.length===1)return n+': the minimum is less than the monthly interest, so the balance would never fall.'}
+ }
+ if(step===1&&(num(S.extra)<0||num(S.lump)<0))return 'Amounts cannot be negative.';
+ return '';
+}
+function show(){
+ const p=PAGES[step];
+ $('title').textContent=p[0];$('sub').textContent=p[1];
+ $('pages').innerHTML=p[2]();upd();
+ $('prog').innerHTML=PAGES.map((x,i)=>`<button type="button" data-go="${i}" ${i>step?'disabled':''} class="px-2.5 py-1 rounded-lg border font-bold ${i===step?'bg-cyan-950/60 border-cyan-700/60 text-cyan-300':i<step?'border-slate-700 text-emerald-400 cursor-pointer hover:bg-slate-800':'border-slate-800 text-slate-500'}">${i+1}. ${x[0]}</button>`).join('');
+ const end=step===LAST;
+ $('back').style.visibility=step===0?'hidden':'visible';
+ $('back').textContent=end?'« Edit inputs':'« Back';
+ $('next').classList.toggle('hidden',end);
+ $('next').textContent=step===LAST-1?'See my plan »':'Next »';
+ ['first','print'].forEach(i=>$(i).classList.toggle('hidden',!end));
+ $('err').classList.add('hidden');window.scrollTo(0,0);
+}
+function go(i){
+ if(i>step){const e=validate();if(e){$('err').textContent=e;$('err').classList.remove('hidden');return}}
+ step=Math.max(0,Math.min(LAST,i));show();
+}
+$('next').onclick=()=>go(step+1);
+$('back').onclick=()=>go(step===LAST?LAST-1:step-1);
+$('first').onclick=()=>go(0);
+$('print').onclick=()=>window.print();
+$('reset').onclick=()=>{if(!confirm('Clear all your inputs and start over?'))return;S=clone(DEF);save();step=0;show()};
+$('prog').onclick=e=>{const b=e.target.closest('[data-go]');if(b&&!b.disabled)go(+b.dataset.go)};
+const pg=$('pages');
+pg.addEventListener('input',e=>{
+ const t=e.target;
+ if(t.dataset.d!==undefined)S.debts[+t.dataset.d][t.dataset.f]=t.value;
+ else if(t.dataset.g)S[t.dataset.g]=t.value;
+ save();upd();
+});
+pg.addEventListener('click',e=>{
+ const c=e.target.closest('button');if(!c)return;const d=c.dataset;
+ if(d.del!==undefined)S.debts.splice(+d.del,1);
+ else if('add' in d)S.debts.push({n:'',b:'',r:'',m:''});
+ else if('ex' in d)S.debts=clone(SAMPLE);
+ else if(d.method)S.method=S.view=d.method;
+ else if(d.roll)S.roll=d.roll;
+ else if(d.view)S.view=d.view;
+ else return;
+ save();show();
+});
+show();
+</script>
+</body>
+</html>
